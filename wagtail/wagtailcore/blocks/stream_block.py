@@ -36,12 +36,13 @@ class StreamBlockValidationError(ValidationError):
 
 class BaseStreamBlock(Block):
 
-    def __init__(self, local_blocks=None, min_num=None, max_num=None, **kwargs):
+    def __init__(self, local_blocks=None, min_num=None, max_num=None, max_min_fields={}, **kwargs):
         self._constructor_kwargs = kwargs
 
         # Used to validate the minimum and maximum number of elements in the block
         self.min_num = min_num
         self.max_num = max_num
+        self.max_min_fields = max_min_fields
 
         super(BaseStreamBlock, self).__init__(**kwargs)
 
@@ -204,6 +205,33 @@ class BaseStreamBlock(Block):
             non_block_errors.append(ErrorList(
                 [_('The maximum number of items is %s' % self.max_num)]
             ))
+
+        if self.max_min_fields:
+            fields = {}
+            for item in value:
+                if not item.block_type in self.max_min_fields:
+                    continue
+                if item.block_type not in fields:
+                    fields[item.block_type] = 0
+                fields[item.block_type] += 1
+
+            for fiel in self.max_min_fields:
+                fiel_title = fiel.replace('_', ' ').title()
+                max_num = self.max_min_fields[fiel].get('max_num', None)
+                min_num = self.max_min_fields[fiel].get('min_num', None)
+                if fiel in fields:
+                    if min_num and min_num > fields[fiel]:
+                        non_block_errors.append(ErrorList(
+                            ['{}: {}'.format(fiel_title, _('The minimum number of items is %s' % min_num))]
+                        ))
+                    if max_num and max_num < fields[fiel]:
+                        non_block_errors.append(ErrorList(
+                            ['{}: {}'.format(fiel_title, _('The maximum number of items is %s' % max_num))]
+                        ))
+                elif min_num:
+                        non_block_errors.append(ErrorList(
+                            ['{}: {}'.format(fiel_title, _('The minimum number of items is %s' % min_num))]
+                        ))
 
         if errors or non_block_errors:
             # The message here is arbitrary - outputting error messages is delegated to the child blocks,
